@@ -1,7 +1,14 @@
 name: Build Windows
 
-# Build ARAnyM for Windows (32-bit and 64-bit) with MSYS2/MinGW-w64 and upload
-# the resulting zip as a GitHub Actions artifact.
+# Build ARAnyM for Windows with MSYS2 (UCRT64) and upload the resulting zip as a
+# GitHub Actions artifact.
+#
+# Note on targets: MSYS2 has deprecated MINGW32 (32-bit) and is phasing out its
+# 32-bit package set, and `mingw-w64-libusb` is no longer built for the MSVCRT
+# (MINGW64) environment. We therefore build on UCRT64, which is MSYS2's
+# recommended modern 64-bit runtime and still ships every dependency (including
+# libusb). If you need an MSVCRT/Win7-era binary, add a MINGW64 matrix entry and
+# drop `--enable-usbhost` from CONFIGURE_ARGS in tools/build-windows.sh.
 on:
   push:
     branches: [ master, main ]
@@ -22,10 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - msystem: MINGW64
-            arch: x86_64
-          - msystem: MINGW32
-            arch: i686
+          - msystem: UCRT64
+            prefix: ucrt-x86_64
     defaults:
       run:
         shell: msys2 {0}
@@ -45,17 +50,17 @@ jobs:
             base-devel
             autotools
             git
-            mingw-w64-${{ matrix.arch }}-toolchain
-            mingw-w64-${{ matrix.arch }}-SDL2
-            mingw-w64-${{ matrix.arch }}-SDL2_image
-            mingw-w64-${{ matrix.arch }}-libjpeg-turbo
-            mingw-w64-${{ matrix.arch }}-libpng
-            mingw-w64-${{ matrix.arch }}-zlib
-            mingw-w64-${{ matrix.arch }}-gmp
-            mingw-w64-${{ matrix.arch }}-mpfr
-            mingw-w64-${{ matrix.arch }}-libusb
-            mingw-w64-${{ matrix.arch }}-freetype
-            mingw-w64-${{ matrix.arch }}-fontconfig
+            mingw-w64-${{ matrix.prefix }}-toolchain
+            mingw-w64-${{ matrix.prefix }}-SDL2
+            mingw-w64-${{ matrix.prefix }}-SDL2_image
+            mingw-w64-${{ matrix.prefix }}-libjpeg-turbo
+            mingw-w64-${{ matrix.prefix }}-libpng
+            mingw-w64-${{ matrix.prefix }}-zlib
+            mingw-w64-${{ matrix.prefix }}-gmp
+            mingw-w64-${{ matrix.prefix }}-mpfr
+            mingw-w64-${{ matrix.prefix }}-libusb
+            mingw-w64-${{ matrix.prefix }}-freetype
+            mingw-w64-${{ matrix.prefix }}-fontconfig
             zip
 
       - name: Build and package
