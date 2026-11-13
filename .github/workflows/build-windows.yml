@@ -1,0 +1,78 @@
+name: Build Windows
+
+# Build ARAnyM for Windows (32-bit and 64-bit) with MSYS2/MinGW-w64 and upload
+# the resulting zip as a GitHub Actions artifact.
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [ published ]
+
+permissions:
+  contents: write   # checkout (read) + attach assets to a GitHub Release
+  actions: read     # required by actions/upload-artifact@v4
+
+jobs:
+  build-windows:
+    name: Windows (${{ matrix.msystem }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - msystem: MINGW64
+            arch: x86_64
+          - msystem: MINGW32
+            arch: i686
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for git log / short commit id
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          cache: true
+          install: >-
+            base-devel
+            autotools
+            git
+            mingw-w64-${{ matrix.arch }}-toolchain
+            mingw-w64-${{ matrix.arch }}-SDL2
+            mingw-w64-${{ matrix.arch }}-SDL2_image
+            mingw-w64-${{ matrix.arch }}-libjpeg-turbo
+            mingw-w64-${{ matrix.arch }}-libpng
+            mingw-w64-${{ matrix.arch }}-zlib
+            mingw-w64-${{ matrix.arch }}-gmp
+            mingw-w64-${{ matrix.arch }}-mpfr
+            mingw-w64-${{ matrix.arch }}-libusb
+            mingw-w64-${{ matrix.arch }}-freetype
+            mingw-w64-${{ matrix.arch }}-fontconfig
+            zip
+
+      - name: Build and package
+        id: build
+        run: ./tools/build-windows.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aranym-windows-${{ matrix.msystem }}
+          path: aranym-*.zip
+          if-no-files-found: error
+
+      # Only attach the builds to the GitHub Release when this run was
+      # triggered by publishing a release.
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: aranym-*.zip
