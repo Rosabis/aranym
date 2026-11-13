@@ -434,9 +434,15 @@ if OS_TYPE_cygwin
 if CPU_TYPE_x86
 aranym_SOURCES += Unix/cygwin/sigsegv_cygwin.cpp
 endif
+if CPU_TYPE_x86_64
+aranym_SOURCES += Unix/cygwin/sigsegv_cygwin.cpp
+endif
 endif
 if OS_TYPE_mingw
 if CPU_TYPE_x86
+aranym_SOURCES += Unix/cygwin/sigsegv_cygwin.cpp
+endif
+if CPU_TYPE_x86_64
 aranym_SOURCES += Unix/cygwin/sigsegv_cygwin.cpp
 endif
 endif
