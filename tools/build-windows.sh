@@ -52,6 +52,13 @@ CONFIGURE_ARGS="--prefix=/usr --enable-usbhost --enable-sdl2"
 # Parallel build (ARAnyM is large; the 3 variants x 2 archs would otherwise be slow).
 NPROC=$(nproc 2>/dev/null || echo 2)
 
+# Staging directory for the finished executables. We copy each built exe here
+# immediately after stripping and run `make clean` afterwards, so a later
+# `make clean` can never delete a finished binary before packaging.
+STAGE="${TMPDIR:-/tmp}/aranym-stage"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+
 build_one() {
   # $1 = extra configure flags, $2 = output exe name
   echo "==> configure $2 ($1)"
@@ -59,7 +66,9 @@ build_one() {
   echo "==> make $2 (-j$NPROC)"
   make -j"$NPROC"
   strip aranym.exe
-  mv aranym.exe "$2"
+  cp aranym.exe "$STAGE/$2"
+  echo "==> cleaning tree for next variant"
+  make clean
 }
 
 # ---------------------------------------------------------------------------
@@ -70,17 +79,13 @@ build_one "--enable-fullmmu --enable-lilo" aranym-mmu.exe
 
 if [ "${ARANYM_SKIP_JIT:-0}" != "1" ]; then
   echo "==> Building aranym-jit"
-  make clean
   build_one "--enable-jit-compiler --enable-jit-fpu" aranym-jit.exe
 else
   echo "==> Skipping JIT build (ARANYM_SKIP_JIT=1)"
 fi
 
 echo "==> Building aranym (default)"
-make clean
 build_one "" aranym.exe
-
-make clean
 
 # ---------------------------------------------------------------------------
 # 3. Assemble the distribution directory
@@ -119,9 +124,9 @@ done
 gcc -O2 -mwin32 tools/ldd.c -o ldd.exe
 
 for f in aranym.exe aranym-jit.exe aranym-mmu.exe; do
-  [ -f "$f" ] || continue
-  cp -a "$f" "$distdir"/ || exit 1
-  ./ldd.exe --path "$f" | while read -r dll; do
+  [ -f "$STAGE/$f" ] || continue
+  cp -a "$STAGE/$f" "$distdir"/ || exit 1
+  ./ldd.exe --path "$STAGE/$f" | while read -r dll; do
     [ -z "$dll" ] && continue
     lower=$(echo "$dll" | tr 'A-Z' 'a-z')
     case "$lower" in
