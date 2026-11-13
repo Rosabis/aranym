@@ -121,23 +121,53 @@ done
 # 4. Copy the executables and bundle their runtime DLLs
 #    (using the project's own tools/ldd.c, which prints full DLL paths)
 # ---------------------------------------------------------------------------
-gcc -O2 -mwin32 tools/ldd.c -o ldd.exe
+# Collect runtime DLLs deterministically via objdump (reads the PE import
+# table for each binary and resolves each imported DLL from the toolchain's
+# bin directory, recursing into every DLL we copy). This is far more reliable
+# than the old tools/ldd.c wrapper, which depended on SearchPathW + Windows
+# path-format parsing and silently dropped indirect deps (e.g. libjpeg-8 via
+# SDL2_image) and the GCC runtime (libgcc_s_seh-1) on UCRT64.
+OBJDUMP=$(command -v x86_64-w64-mingw32-objdump 2>/dev/null)
+[ -z "$OBJDUMP" ] && OBJDUMP=$(command -v objdump 2>/dev/null)
+[ -z "$OBJDUMP" ] && { echo "objdump not found; install the binutils package" >&2; exit 1; }
+
+# Where the MinGW/UCRT64 runtime DLLs live. Derive from gcc's location and
+# add the usual suspects so the resolver is robust regardless of msystem.
+BIN_DIRS="$(dirname "$(command -v gcc 2>/dev/null)")"
+BIN_DIRS="$BIN_DIRS /ucrt64/bin /mingw64/bin /clang64/bin /usr/bin"
+
+collect_dlls() {
+  # $1 = path to a PE binary (exe or already-collected dll)
+  local f="$1" dep base found
+  [ -f "$f" ] || return 0
+  "$OBJDUMP" -p "$f" 2>/dev/null \
+    | sed -n 's/.*DLL Name:[[:space:]]*//p' \
+    | sort -u \
+    | while read -r dep; do
+        [ -z "$dep" ] && continue
+        # Skip executables and Win32 API-set DLLs (resolved by the OS).
+        case "$dep" in
+          *.exe) continue ;;
+          api-ms-* | ext-ms-* | *:* ) continue ;;
+        esac
+        base=$(basename "$dep")
+        [ -e "$distdir/$base" ] && continue
+        found=$(find $BIN_DIRS -iname "$base" 2>/dev/null | head -n1)
+        if [ -z "$found" ]; then
+          echo "  (skip $base: not found in toolchain bin)" >&2
+          continue
+        fi
+        cp -a "$found" "$distdir"/ || echo "  (copy failed: $base)" >&2
+        collect_dlls "$found"
+      done
+}
 
 for f in aranym.exe aranym-jit.exe aranym-mmu.exe; do
   [ -f "$STAGE/$f" ] || continue
   cp -a "$STAGE/$f" "$distdir"/ || exit 1
-  ./ldd.exe --path "$STAGE/$f" | while read -r dll; do
-    [ -z "$dll" ] && continue
-    lower=$(echo "$dll" | tr 'A-Z' 'a-z')
-    case "$lower" in
-      */system32/* | */syswow64/* ) continue ;;   # skip OS DLLs
-    esac
-    base=$(basename "$dll")
-    [ -e "$distdir/$base" ] && continue
-    cp -a "$dll" "$distdir"/ || true
-  done
+  echo "==> collecting DLLs for $f"
+  collect_dlls "$STAGE/$f"
 done
-rm -f ldd.exe
 
 # ---------------------------------------------------------------------------
 # 5. Zip it up and drop the archive in the repo root
