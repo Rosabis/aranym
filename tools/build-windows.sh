@@ -127,8 +127,16 @@ done
 # than the old tools/ldd.c wrapper, which depended on SearchPathW + Windows
 # path-format parsing and silently dropped indirect deps (e.g. libjpeg-8 via
 # SDL2_image) and the GCC runtime (libgcc_s_seh-1) on UCRT64.
-OBJDUMP=$(command -v x86_64-w64-mingw32-objdump 2>/dev/null)
-[ -z "$OBJDUMP" ] && OBJDUMP=$(command -v objdump 2>/dev/null)
+# Detect objdump without tripping set -e on a failed 'command -v' lookup.
+# (Under set -e, VAR=$(command -v x) aborts silently when x is absent, because
+#  the assignment inherits the non-zero exit status and any stderr is suppressed.)
+OBJDUMP=""
+for cand in objdump x86_64-w64-mingw32-objdump; do
+  if command -v "$cand" >/dev/null 2>&1; then
+    OBJDUMP=$(command -v "$cand" 2>/dev/null)
+    break
+  fi
+done
 [ -z "$OBJDUMP" ] && { echo "objdump not found; install the binutils package" >&2; exit 1; }
 
 # Where the MinGW/UCRT64 runtime DLLs live. Derive from gcc's location and
@@ -168,6 +176,9 @@ for f in aranym.exe aranym-jit.exe aranym-mmu.exe; do
   echo "==> collecting DLLs for $f"
   collect_dlls "$STAGE/$f"
 done
+
+echo "==> Distribution contents ($(ls "$distdir" | wc -l) entries):"
+ls -la "$distdir" | sed 's/^/    /'
 
 # ---------------------------------------------------------------------------
 # 5. Zip it up and drop the archive in the repo root
