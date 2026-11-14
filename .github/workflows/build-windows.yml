@@ -53,6 +53,11 @@ jobs:
             mingw-w64-${{ matrix.prefix }}-toolchain
             mingw-w64-${{ matrix.prefix }}-binutils
             mingw-w64-${{ matrix.prefix }}-SDL2
+            # MSYS2's SDL2 package is the sdl2-compat shim (it Provides
+            # sdl2-compat); its SDL2.dll dynamically loads SDL3.dll at runtime,
+            # so we must also ship SDL3.dll or aranym fails with
+            # "Failed loading SDL3 library."
+            mingw-w64-${{ matrix.prefix }}-SDL3
             mingw-w64-${{ matrix.prefix }}-SDL2_image
             mingw-w64-${{ matrix.prefix }}-libjpeg-turbo
             mingw-w64-${{ matrix.prefix }}-libpng

@@ -177,6 +177,21 @@ for f in aranym.exe aranym-jit.exe aranym-mmu.exe; do
   collect_dlls "$STAGE/$f"
 done
 
+# sdl2-compat (the SDL2.dll we bundle) dynamically loads SDL3.dll at runtime
+# via SDL_LoadObject(); that dependency is NOT in the PE import table, so the
+# objdump collector above cannot see it. Copy it explicitly or aranym dies at
+# startup with "Failed loading SDL3 library."
+echo "==> explicitly bundling SDL3.dll (sdl2-compat runtime dependency)"
+for extra in SDL3.dll; do
+  found=$(find $BIN_DIRS -iname "$extra" 2>/dev/null | head -n1)
+  if [ -n "$found" ]; then
+    cp -a "$found" "$distdir"/ || echo "  (copy failed: $extra)" >&2
+    echo "    $extra <- $found"
+  else
+    echo "  (WARNING: $extra not found; sdl2-compat will fail at runtime)" >&2
+  fi
+done
+
 echo "==> Distribution contents ($(ls "$distdir" | wc -l) entries):"
 ls -la "$distdir" | sed 's/^/    /'
 
