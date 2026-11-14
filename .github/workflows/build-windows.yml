@@ -56,7 +56,7 @@ jobs:
             mingw-w64-${{ matrix.prefix }}-toolchain
             mingw-w64-${{ matrix.prefix }}-binutils
             mingw-w64-${{ matrix.prefix }}-SDL2
-            mingw-w64-${{ matrix.prefix }}-SDL3
+            mingw-w64-${{ matrix.prefix }}-sdl3
             mingw-w64-${{ matrix.prefix }}-SDL2_image
             mingw-w64-${{ matrix.prefix }}-libjpeg-turbo
             mingw-w64-${{ matrix.prefix }}-libpng
